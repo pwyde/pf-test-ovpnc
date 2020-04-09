@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
- 
+
 _print_help() {
     echo "
 Usage:
   ${0} --vpn-iface <interface> --vpn-id <id>
- 
+
 Description:
   A script for pfSense that restarts specified OpenVPN client connection if it
   appears to be down.
- 
+
 Options:
   -i, --vpn-iface    OpenVPN client interface, i.e. 'ovpnc1'. This can be
                      acquired with 'ifconfig'.
- 
+
   -I, --vpn-id       OpenVPN client ID, i.e. '1'. This can be obtained from the
                      pfSense configuration file '/cf/conf/config.xml'.
-" >&2
+" >&1
 }
- 
+
 # Print help if no argument is specified.
 if [[ "${#}" -le 0 ]]; then
     _print_help
     exit 1
 fi
- 
+
 # Loop as long as there is at least one more argument.
 while [[ "${#}" -gt 0 ]]; do
     key="${1}"
@@ -42,7 +42,7 @@ while [[ "${#}" -gt 0 ]]; do
     # Shift after checking all the cases to get the next option.
     shift
 done
- 
+
 VPN_INET="$(/sbin/ifconfig "${VPN_IFACE}" | /usr/bin/grep "inet")"
 VPN_INET_IP="$(/sbin/ifconfig "${VPN_IFACE}" | awk '/inet / {print $2}')"
 PF_CONF="/cf/conf/config.xml"
@@ -50,7 +50,7 @@ LOG_FILE="/var/log/pf-test-ovpnc.log"
 HOST="$(/bin/hostname -s)"
 TIMESTAMP="$(/bin/date +"%b  %d %T")"
 LOGLINE="${TIMESTAMP} ${HOST} ${0}:"
- 
+
 _validate_script() {
     # Validate specified network interface.
     if /sbin/ifconfig "${VPN_IFACE}" > /dev/null 2>&1; then
@@ -62,21 +62,21 @@ _validate_script() {
         echo "<1>${LOGLINE} ERROR: Network interface '${VPN_IFACE}' does not exist." >> "${LOG_FILE}"
         exit 1
     fi
- 
+
     # Validate OpenVPN client interface argument.
     if [[ -z "${VPN_IFACE}" ]]; then
         echo "${LOGLINE} ERROR: No OpenVPN client interface specified. Please use '-i' or see help '-h'."
         echo "<2>${LOGLINE} ERROR: No OpenVPN client interface specified. Please use '-i' or see help '-h'." >> "${LOG_FILE}"
         exit 1
     fi
- 
+
     # Validate OpenVPN client ID argument.
     if [[ -z "${VPN_ID}" ]]; then
         echo "${LOGLINE} ERROR: No OpenVPN client ID specified. Please use '-I' or see help '-h'."
         echo "<3>${LOGLINE} ERROR: No OpenVPN client ID specified. Please use '-I' or see help '-h'." >> "${LOG_FILE}"
         exit 1
     fi
- 
+
     # Validate pfSense configuration file.
     if [[ -e "${PF_CONF}" ]]; then
         echo "${LOGLINE} Located pfSense configuration file '${PF_CONF}'."
@@ -86,24 +86,24 @@ _validate_script() {
         echo "<4>${LOGLINE} ERROR: Could not locate pfSense configuration file '${PF_CONF}'." >> "${LOG_FILE}"
         exit 1
     fi
- 
+
     # Extract OpenVPN client information from pfSense configuratione file.
     VPNID="$(/usr/local/bin/xmllint --xpath "string(/pfsense/openvpn/openvpn-client/vpnid)" --nocdata "${PF_CONF}")"
     VPN_DESCR="$(/usr/local/bin/xmllint --xpath "string(/pfsense/openvpn/openvpn-client/description)" --nocdata "${PF_CONF}")"
- 
+
     # Validate specified OpenVPN client ID.
     if [[ "${VPN_ID}" != "${VPNID}" ]]; then
         echo "${LOGLINE} ERROR: Specified OpenVPN client ID '${VPN_ID}' does not exist in pfSense configuration file '${PF_CONF}'."
         echo "<5>${LOGLINE} ERROR: Specified OpenVPN client ID '${VPN_ID}' does not exist in pfSense configuration file '${PF_CONF}'." >> "${LOG_FILE}"
         exit 1
     fi
- 
+
     # If OpenVPN client connection has no description specified in configuration, give it a name.
     if [[ -z "${VPN_DESCR}" ]]; then
         VPN_DESCR="NAMELESS CONNECTION"
     fi
 }
- 
+
 _test_openvpn_client_conn() {
     if [[ -z "${VPN_INET}" ]]; then
         echo "${LOGLINE} WARNING: Could not obtain inet address for OpenVPN client interface '${VPN_IFACE}'. Client connection '${VPN_DESCR}' appears to be down (vpnid: ${VPN_ID})."
@@ -116,7 +116,7 @@ _test_openvpn_client_conn() {
         echo "<102>${LOGLINE} INFO: Obtained inet address for OpenVPN client interface '${VPN_IFACE}'. Client connection '${VPN_DESCR}' appears to be up (vpnid: ${VPN_ID})." >> "${LOG_FILE}"
     fi
 }
- 
+
 _test_internet_conn() {
     ping -oc 10 -S "${VPN_INET_IP}" 8.8.8.8 > /dev/null
     if [[ "${?}" -eq 0 ]]; then
@@ -130,7 +130,7 @@ _test_internet_conn() {
         echo "<?php include('openvpn.inc'); openvpn_restart_by_vpnid(client, ${VPN_ID});?>" | /usr/local/bin/php -q
     fi
 }
- 
+
 _validate_script
 _test_openvpn_client_conn
 _test_internet_conn
